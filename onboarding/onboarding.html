@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ATS Resume Matcher — Setup</title>
+  <link rel="stylesheet" href="onboarding.css" />
+</head>
+<body>
+
+  <div class="page">
+    <!-- Progress Bar -->
+    <div class="progress-bar">
+      <div class="progress-bar__fill" id="progress-fill"></div>
+    </div>
+
+    <!-- ── Step 1: Welcome + Privacy Consent ── -->
+    <div class="step" id="step-1">
+      <div class="step__hero">
+        <img src="../icons/icon128.png" alt="ATS Matcher" class="hero-logo" />
+        <h1>Welcome to<br/>ATS Resume Matcher</h1>
+        <p class="hero-sub">Know your chances before you apply. Beat the black hole.</p>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">🔒 Privacy &amp; Terms</h2>
+        <div class="card__body">
+          <p>Before we start, please read how your data is handled:</p>
+          <ul>
+            <li><strong>Your resume</strong> (PDF/DOCX) is read in your browser and <strong>only its keywords</strong> are stored locally — never the full file.</li>
+            <li><strong>Job descriptions</strong> are scraped from LinkedIn and processed in-memory. They are <strong>never stored</strong>.</li>
+            <li><strong>Your data is sent to Google's Gemini AI API</strong> using your own API key for keyword extraction. By continuing, you consent to this processing.</li>
+            <li>The developer (<strong>Jayadev</strong>) operates <strong>no servers</strong> and has no access to your data.</li>
+            <li>You can <strong>delete all stored data</strong> at any time from the extension settings.</li>
+          </ul>
+          <p class="disclaimer">This extension is provided "as is". Jayadev accepts no liability for outcomes related to job applications or data processed through the Gemini API.</p>
+        </div>
+
+        <label class="checkbox-label">
+          <input type="checkbox" id="consent-checkbox" />
+          <span>I understand and consent to the above terms.</span>
+        </label>
+      </div>
+
+      <button class="btn btn--primary" id="btn-accept" disabled>
+        Accept &amp; Continue →
+      </button>
+    </div>
+
+    <!-- ── Step 2: Gemini API Key ── -->
+    <div class="step hidden" id="step-2">
+      <div class="step__top">
+        <div class="step-number">Step 1 of 2</div>
+        <h2>Add Your Gemini API Key</h2>
+        <p class="step__desc">
+          ATS Matcher uses Google's Gemini AI to extract keywords. You need a free API key — it stays in your browser only.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="how-to">
+          <div class="how-to__step">
+            <span class="how-to__num">1</span>
+            <span>Visit <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a></span>
+          </div>
+          <div class="how-to__step">
+            <span class="how-to__num">2</span>
+            <span>Click <strong>"Create API key"</strong></span>
+          </div>
+          <div class="how-to__step">
+            <span class="how-to__num">3</span>
+            <span>Copy &amp; paste it below</span>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Gemini API Key</label>
+          <div class="input-row">
+            <input type="password" id="api-key-input" class="input" placeholder="AIza…" autocomplete="off" />
+            <button class="btn btn--sm" id="btn-toggle-key" title="Show/hide key">👁</button>
+          </div>
+          <p class="hint">Gemini 1.5 Flash is free for personal use with generous limits.</p>
+        </div>
+
+        <div class="feedback hidden" id="key-feedback"></div>
+      </div>
+
+      <button class="btn btn--primary" id="btn-save-key">Save &amp; Continue →</button>
+      <button class="btn btn--ghost" id="btn-skip-key">Skip for now</button>
+    </div>
+
+    <!-- ── Step 3: Upload Resume ── -->
+    <div class="step hidden" id="step-3">
+      <div class="step__top">
+        <div class="step-number">Step 2 of 2</div>
+        <h2>Upload Your Resume</h2>
+        <p class="step__desc">
+          Upload your base resume. We'll extract your skills so we can compare them to any job instantly.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="upload-zone" id="upload-zone">
+          <input type="file" id="file-input" accept=".pdf,.docx" hidden />
+          <div class="upload-zone__icon">📄</div>
+          <div class="upload-zone__primary">Drag &amp; drop your resume here</div>
+          <div class="upload-zone__secondary">Supports PDF and DOCX · Max 10 MB</div>
+          <button class="btn btn--outline" id="btn-browse">Browse files</button>
+        </div>
+
+        <div class="upload-progress hidden" id="upload-progress">
+          <div class="spinner"></div>
+          <span id="upload-status">Reading file…</span>
+        </div>
+
+        <div class="feedback hidden" id="upload-feedback"></div>
+      </div>
+
+      <button class="btn btn--ghost" id="btn-skip-resume">I'll do this later</button>
+    </div>
+
+    <!-- ── Step 4: Ready! ── -->
+    <div class="step hidden" id="step-4">
+      <div class="step__hero step__hero--success">
+        <div class="success-icon">🎉</div>
+        <h1>You're all set!</h1>
+        <p class="hero-sub">Head to LinkedIn and open any job posting. Your ATS score will appear automatically.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <span class="feature-icon">📊</span>
+          <h3>Instant Score</h3>
+          <p>See your ATS match % right next to the Apply button</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🎯</span>
+          <h3>Missing Keywords</h3>
+          <p>Know exactly what to add to pass the ATS filter</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🔒</span>
+          <h3>100% Private</h3>
+          <p>All data stays in your browser. No external servers.</p>
+        </div>
+      </div>
+
+      <button class="btn btn--primary" id="btn-go-linkedin">
+        Open LinkedIn Jobs →
+      </button>
+      <button class="btn btn--ghost" id="btn-close-tab">Close this tab</button>
+    </div>
+
+  </div><!-- /.page -->
+
+  <script src="../lib/mammoth.browser.min.js"></script>
+  <script src="onboarding.js"></script>
+</body>
+</html>

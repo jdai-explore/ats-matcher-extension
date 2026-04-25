@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ATS Resume Matcher</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+
+  <!-- ── Loading State ── -->
+  <div id="view-loading" class="view">
+    <div class="spinner-wrap"><div class="spinner"></div></div>
+  </div>
+
+  <!-- ── Onboarding nudge (not yet set up) ── -->
+  <div id="view-setup" class="view hidden">
+    <div class="header">
+      <img src="../icons/icon48.png" alt="ATS Matcher" class="logo" />
+      <h1>ATS Resume Matcher</h1>
+      <p class="subtitle">You're almost ready!</p>
+    </div>
+    <div class="setup-steps" id="setup-steps"></div>
+    <button class="btn btn--primary" id="btn-open-onboarding">Complete Setup →</button>
+  </div>
+
+  <!-- ── Ready State ── -->
+  <div id="view-ready" class="view hidden">
+    <div class="header header--compact">
+      <img src="../icons/icon32.png" alt="" class="logo-sm" />
+      <span class="brand">ATS Resume Matcher</span>
+      <button class="icon-btn" id="btn-settings" title="Settings">⚙️</button>
+    </div>
+
+    <!-- Status card -->
+    <div class="status-card" id="status-card">
+      <div class="status-card__inner">
+        <div class="status-icon">📄</div>
+        <div class="status-info">
+          <div class="status-filename" id="status-filename">resume.pdf</div>
+          <div class="status-meta" id="status-meta">123 keywords extracted</div>
+        </div>
+        <span class="status-badge status-badge--ok">✓ Active</span>
+      </div>
+    </div>
+
+    <!-- Instruction -->
+    <div class="instruction-box">
+      <span class="instruction-icon">👉</span>
+      <p>Navigate to any <strong>LinkedIn job posting</strong> and watch your ATS score appear automatically.</p>
+    </div>
+
+    <!-- Update resume -->
+    <div class="section-title">Update Resume</div>
+    <div class="upload-zone" id="upload-zone">
+      <input type="file" id="file-input" accept=".pdf,.docx" hidden />
+      <span class="upload-icon">📤</span>
+      <span class="upload-text">Drop PDF or DOCX here, or <u>click to browse</u></span>
+    </div>
+    <div class="upload-progress hidden" id="upload-progress">
+      <div class="spinner spinner--sm"></div>
+      <span id="upload-status-text">Parsing resume…</span>
+    </div>
+    <div class="upload-success hidden" id="upload-success">
+      ✅ Resume updated! <span id="upload-kw-count"></span> keywords found.
+    </div>
+    <div class="upload-error hidden" id="upload-error"></div>
+  </div>
+
+  <!-- ── Settings Panel ── -->
+  <div id="view-settings" class="view hidden">
+    <div class="header header--compact">
+      <button class="icon-btn" id="btn-back">←</button>
+      <span class="brand">Settings</span>
+    </div>
+
+    <div class="settings-section">
+      <label class="settings-label">Gemini API Key</label>
+      <div class="key-row">
+        <input type="password" id="api-key-input" class="input" placeholder="AIza…" autocomplete="off" />
+        <button class="btn btn--sm btn--primary" id="btn-save-key">Save</button>
+      </div>
+      <p class="hint">
+        Get a free key at
+        <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a>.
+        Your key is stored only in this browser.
+      </p>
+      <div class="key-feedback hidden" id="key-feedback"></div>
+    </div>
+
+    <div class="settings-section">
+      <label class="settings-label">Privacy &amp; Data</label>
+      <p class="hint">
+        Your resume keywords are stored <strong>only in this browser's local storage</strong>.
+        Your actual resume file is never saved. Job descriptions are processed in-memory and discarded.
+      </p>
+      <button class="btn btn--sm btn--danger" id="btn-delete-data">🗑 Delete All My Data</button>
+    </div>
+
+    <div class="settings-section">
+      <label class="settings-label">About</label>
+      <p class="hint">ATS Resume Matcher v1.0.0 · Built by Jayadev</p>
+      <p class="hint">
+        <a href="#" id="btn-view-terms">View Terms &amp; Privacy</a>
+      </p>
+    </div>
+
+    <!-- Terms modal -->
+    <div class="modal hidden" id="terms-modal">
+      <div class="modal__box">
+        <h2>Terms &amp; Privacy</h2>
+        <div class="modal__body">
+          <p><strong>Data Processing:</strong> When you upload a resume or view a LinkedIn job, the text is sent to Google's Gemini AI API using <em>your own API key</em>. By using this extension, you acknowledge and consent to this.</p>
+          <p><strong>What is sent to Gemini:</strong> Resume text (PDF/DOCX content) and job description text scraped from LinkedIn.</p>
+          <p><strong>What is stored locally:</strong> Only the extracted keyword list from your resume (not the full text). Your Gemini API key. Your consent record.</p>
+          <p><strong>No external servers:</strong> The extension developer (Jayadev) operates no backend servers. No data is sent anywhere except directly to Google's Gemini API.</p>
+          <p><strong>Liability disclaimer:</strong> This extension is provided "as is". The developer (Jayadev) accepts no liability for decisions made based on ATS scores, for data processed through the Gemini API, or for any outcomes related to job applications.</p>
+          <p><strong>GDPR:</strong> You may delete all stored data at any time via Settings → Delete All My Data.</p>
+        </div>
+        <button class="btn btn--primary" id="btn-close-terms">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../lib/mammoth.browser.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

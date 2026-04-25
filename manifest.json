@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "ATS Resume Matcher for LinkedIn",
+  "version": "1.0.0",
+  "description": "Instantly see how well your resume matches any LinkedIn job posting. Powered by Gemini AI.",
+  "author": "Jayadev",
+
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/jobs/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "ATS Resume Matcher",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["lib/*", "onboarding/*", "icons/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
