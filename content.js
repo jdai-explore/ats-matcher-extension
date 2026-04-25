@@ -25,9 +25,8 @@
   init();
 
   function init() {
-    // LinkedIn is a SPA — watch for URL changes
+    console.log("[ATS Matcher] Content script loaded on:", location.href);
     watchUrlChanges();
-    // Also run immediately in case we land on a job page
     onPageChange();
   }
 
@@ -44,11 +43,12 @@
   }
 
   function onPageChange() {
-    if (!isJobPage()) {
+    const jobId = extractJobId();
+    console.log("[ATS Matcher] onPageChange — URL:", location.href, "jobId:", jobId);
+    if (!jobId) {
       removeWidget();
       return;
     }
-    const jobId = extractJobId();
     if (jobId === currentJobId) return; // same job, no re-analysis
     currentJobId = jobId;
     removeWidget();
@@ -57,13 +57,14 @@
 
   // ─── LinkedIn Page Detection ─────────────────────────────────────────────────
 
-  function isJobPage() {
-    return /linkedin\.com\/jobs\/(view|search)/.test(location.href);
-  }
-
   function extractJobId() {
-    const match = location.href.match(/\/jobs\/view\/(\d+)/);
-    return match ? match[1] : location.href;
+    // Pattern 1: /jobs/view/1234567
+    const viewMatch = location.href.match(/\/jobs\/view\/(\d+)/);
+    if (viewMatch) return viewMatch[1];
+    // Pattern 2: ?currentJobId=1234567 (search results, collections, feed)
+    const paramMatch = location.href.match(/[?&]currentJobId=(\d+)/);
+    if (paramMatch) return paramMatch[1];
+    return null;
   }
 
   // ─── Wait for Job Description DOM ────────────────────────────────────────────
@@ -91,23 +92,29 @@
   // ─── Job Description Scraper ─────────────────────────────────────────────────
 
   function scrapeJobDescription() {
-    // LinkedIn has several container patterns — try all known ones
     const selectors = [
-      ".job-view-layout .jobs-description__content",
-      ".jobs-description-content__text",
-      ".jobs-box__html-content",
-      "[class*='description__text']",
-      ".jobs-description",
+      // Current LinkedIn selectors (2024-2025)
       "#job-details",
+      ".job-details-jobs-unified-top-card__job-insight",
+      ".jobs-description__content",
+      ".jobs-description-content__text",
+      "[class*='jobs-description__content']",
+      "[class*='description__text']",
+      // Older fallbacks
+      ".job-view-layout .jobs-description__content",
+      ".jobs-box__html-content",
+      ".jobs-description",
       ".description__text",
     ];
 
     for (const sel of selectors) {
       const el = document.querySelector(sel);
       if (el && el.innerText.trim().length > 80) {
+        console.log("[ATS Matcher] JD found via selector:", sel, "— length:", el.innerText.trim().length);
         return el.innerText.trim();
       }
     }
+    console.warn("[ATS Matcher] No JD element found. Tried:", selectors.join(", "));
     return null;
   }
 
@@ -121,6 +128,7 @@
       const response = await chrome.runtime.sendMessage({
         type:    "ANALYZE_JOB",
         jobText: jobText,
+        jobId:   currentJobId,
       });
 
       analysisInFlight = false;
@@ -243,6 +251,7 @@
       score, jobTitle, seniority, suggestion,
       matchedRequired, missingRequired,
       matchedPreferred, missingPreferred,
+      paretoSkills = [],
     } = data;
 
     const { cls } = scoreAppearance(score);
@@ -280,6 +289,19 @@
               <span class="ats-suggestion__icon">💡</span>
               <p>${escHtml(suggestion)}</p>
             </div>
+
+            ${paretoSkills.length > 0 ? `
+            <div class="ats-section">
+              <div class="ats-section__header ats-section__header--pareto">
+                <span>🎯 Add These ${paretoSkills.length} to Hit 90%</span>
+                <span class="ats-count">${paretoSkills.length}</span>
+              </div>
+              <div class="ats-chips">
+                ${paretoSkills.map(p =>
+                  `<span class="ats-chip ats-chip--pareto" title="${p.type === 'required' ? 'Required' : 'Preferred'}">${escHtml(p.skill)}</span>`
+                ).join("")}
+              </div>
+            </div>` : ""}
 
             <div class="ats-section">
               <div class="ats-section__header ats-section__header--green">
@@ -566,6 +588,7 @@
       .ats-section__header--red    { background: #fee2e2; color: #991b1b; }
       .ats-section__header--blue   { background: #dbeafe; color: #1e40af; }
       .ats-section__header--orange { background: #fed7aa; color: #9a3412; }
+      .ats-section__header--pareto { background: #fdf4ff; color: #6b21a8; border: 1px solid #e9d5ff; font-size: 13px; }
 
       .ats-count {
         background: rgba(0,0,0,0.1);
@@ -592,6 +615,7 @@
       .ats-chip--missing          { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
       .ats-chip--preferred-matched{ background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; }
       .ats-chip--preferred-missing{ background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+      .ats-chip--pareto           { background: #faf5ff; color: #7e22ce; border: 2px solid #d8b4fe; font-weight: 600; }
 
       .ats-empty { font-size: 12px; color: #9ca3af; font-style: italic; padding: 2px 4px; }
 

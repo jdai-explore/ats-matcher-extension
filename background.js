@@ -7,11 +7,13 @@
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const GEMINI_MODEL    = "gemini-1.5-flash";
+const GEMINI_MODEL    = "gemini-2.5-flash";
+const JOB_CACHE_MAX   = 30; // max cached job analyses
 const STORAGE_KEYS    = {
   API_KEY:       "gemini_api_key",
   RESUME_DATA:   "resume_keywords",
-  RESUME_META:   "resume_meta",       // filename, uploadedAt
+  RESUME_META:   "resume_meta",       // filename, fileSize, uploadedAt
+  JOB_CACHE:     "job_analysis_cache", // { [jobId]: analysisResult }
   GDPR_CONSENT:  "gdpr_consent",
   SETUP_DONE:    "setup_complete",
 };
@@ -39,8 +41,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           break;
 
         case "ANALYZE_JOB":
-          // message.jobText = scraped job description
-          const analysis = await analyzeJob(message.jobText);
+          // message.jobText = scraped job description, message.jobId = LinkedIn job ID
+          const analysis = await analyzeJob(message.jobText, message.jobId);
           sendResponse(analysis);
           break;
 
@@ -119,9 +121,17 @@ function countKeywords(resumeData) {
 
 // ─── Resume Parsing ──────────────────────────────────────────────────────────
 
-async function parseResume({ fileData, mimeType, fileName, extractedText }) {
+async function parseResume({ fileData, mimeType, fileName, fileSize, extractedText }) {
   const apiKey = await getApiKey();
   if (!apiKey) throw new Error("No API key configured.");
+
+  // Return cached result if the same file (name + size) was already parsed
+  const stored = await chrome.storage.local.get([STORAGE_KEYS.RESUME_DATA, STORAGE_KEYS.RESUME_META]);
+  const meta   = stored[STORAGE_KEYS.RESUME_META];
+  const cached = stored[STORAGE_KEYS.RESUME_DATA];
+  if (cached && meta && meta.fileName === (fileName || "resume") && meta.fileSize === fileSize) {
+    return { ok: true, resumeData: cached, cached: true };
+  }
 
   let prompt = `You are a professional resume parser. Extract all relevant professional information from this resume and return ONLY a valid JSON object with no markdown, no explanation, no code fences — raw JSON only.
 
@@ -170,8 +180,9 @@ Normalize casing to Title Case for skills.`;
   await chrome.storage.local.set({
     [STORAGE_KEYS.RESUME_DATA]: parsed,
     [STORAGE_KEYS.RESUME_META]: {
-      fileName: fileName || "resume",
-      uploadedAt: new Date().toISOString(),
+      fileName:     fileName || "resume",
+      fileSize:     fileSize || 0,
+      uploadedAt:   new Date().toISOString(),
       keywordCount: parsed.allKeywords.length,
     },
     [STORAGE_KEYS.SETUP_DONE]: true,
@@ -182,7 +193,7 @@ Normalize casing to Title Case for skills.`;
 
 // ─── Job Analysis ────────────────────────────────────────────────────────────
 
-async function analyzeJob(jobText) {
+async function analyzeJob(jobText, jobId) {
   if (!jobText || jobText.trim().length < 50) {
     throw new Error("Job description too short to analyze.");
   }
@@ -190,9 +201,17 @@ async function analyzeJob(jobText) {
   const apiKey = await getApiKey();
   if (!apiKey) throw new Error("No API key configured.");
 
-  const stored = await chrome.storage.local.get(STORAGE_KEYS.RESUME_DATA);
+  const stored = await chrome.storage.local.get([STORAGE_KEYS.RESUME_DATA, STORAGE_KEYS.JOB_CACHE]);
   const resumeData = stored[STORAGE_KEYS.RESUME_DATA];
   if (!resumeData) throw new Error("No resume uploaded yet.");
+
+  // Return cached analysis for this job if available
+  if (jobId) {
+    const jobCache = stored[STORAGE_KEYS.JOB_CACHE] || {};
+    if (jobCache[jobId]) {
+      return { ok: true, ...jobCache[jobId], fromCache: true };
+    }
+  }
 
   // Step 1: Extract keywords from job description
   const jdPrompt = `You are an ATS (Applicant Tracking System) expert. Analyze this job description and extract keywords, returning ONLY raw JSON with no markdown or explanation.
@@ -219,25 +238,36 @@ ${jobText.slice(0, 8000)}`;
     throw new Error("Could not parse job description. Please try again.");
   }
 
-  // Step 2: Compute match score
-  const matchResult = computeMatchScore(resumeData, jdData);
+  // Step 2: Compute match score + pareto skills
+  const matchResult  = computeMatchScore(resumeData, jdData);
+  const paretoSkills = computeParetoSkills(matchResult, jdData);
 
-  // Job description text is NOT stored — processed only in memory
-  return {
-    ok: true,
-    score: matchResult.score,
-    matched: matchResult.matched,
-    missing: matchResult.missing,
-    matchedRequired: matchResult.matchedRequired,
-    missingRequired: matchResult.missingRequired,
+  const result = {
+    score:            matchResult.score,
+    matched:          matchResult.matched,
+    missing:          matchResult.missing,
+    matchedRequired:  matchResult.matchedRequired,
+    missingRequired:  matchResult.missingRequired,
     matchedPreferred: matchResult.matchedPreferred,
     missingPreferred: matchResult.missingPreferred,
-    jobTitle: jdData.jobTitle || "",
-    seniority: jdData.seniority || "",
-    totalRequired: jdData.required?.length || 0,
-    totalPreferred: jdData.preferred?.length || 0,
-    suggestion: buildSuggestion(matchResult, jdData.jobTitle),
+    paretoSkills,
+    jobTitle:         jdData.jobTitle || "",
+    seniority:        jdData.seniority || "",
+    totalRequired:    jdData.required?.length || 0,
+    totalPreferred:   jdData.preferred?.length || 0,
+    suggestion:       buildSuggestion(matchResult, jdData.jobTitle),
   };
+
+  // Cache result keyed by jobId (evict oldest if over limit)
+  if (jobId) {
+    const jobCache   = stored[STORAGE_KEYS.JOB_CACHE] || {};
+    const keys       = Object.keys(jobCache);
+    if (keys.length >= JOB_CACHE_MAX) delete jobCache[keys[0]];
+    jobCache[jobId]  = result;
+    await chrome.storage.local.set({ [STORAGE_KEYS.JOB_CACHE]: jobCache });
+  }
+
+  return { ok: true, ...result };
 }
 
 // ─── Scoring Algorithm ───────────────────────────────────────────────────────
@@ -301,6 +331,38 @@ function computeMatchScore(resumeData, jdData) {
   };
 }
 
+// Returns the minimum set of missing skills that would push score to >= targetScore (default 90).
+// Required skills (2x weight) are listed first for maximum impact.
+function computeParetoSkills(matchResult, jdData, targetScore = 90) {
+  const { matchedRequired, matchedPreferred, missingRequired, missingPreferred } = matchResult;
+  const required  = jdData.required  || [];
+  const preferred = jdData.preferred || [];
+
+  const maxScore  = required.length * 2 + preferred.length;
+  if (maxScore === 0) return [];
+
+  const achieved  = matchedRequired.length * 2 + matchedPreferred.length;
+  const current   = Math.round((achieved / maxScore) * 100);
+  if (current >= targetScore) return [];
+
+  const needed = Math.ceil((targetScore / 100) * maxScore) - achieved;
+  const pareto = [];
+  let gap      = needed;
+
+  for (const kw of missingRequired) {
+    if (gap <= 0) break;
+    pareto.push({ skill: kw, type: "required" });
+    gap -= 2;
+  }
+  for (const kw of missingPreferred) {
+    if (gap <= 0) break;
+    pareto.push({ skill: kw, type: "preferred" });
+    gap -= 1;
+  }
+
+  return pareto;
+}
+
 function normalize(str) {
   return str.toLowerCase().replace(/[^a-z0-9+#.]/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -338,8 +400,10 @@ async function callGemini(apiKey, contentParts) {
   const body = {
     contents: [{ role: "user", parts: contentParts }],
     generationConfig: {
-      temperature:     0.1,  // Low temp for consistent structured output
-      maxOutputTokens: 2048,
+      temperature:      0.1,
+      maxOutputTokens:  8192,
+      responseMimeType: "application/json",
+      thinkingConfig:   { thinkingBudget: 0 }, // disable thinking — saves tokens, not needed for JSON extraction
     },
   };
 
@@ -359,7 +423,16 @@ async function callGemini(apiKey, contentParts) {
   }
 
   const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  // gemini-2.5-flash uses thinking by default — thoughts land in earlier parts,
+  // the actual answer is in the last part that has text.
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  const text  = [...parts].reverse().find(p => p.text)?.text;
+
+  console.log("[ATS Matcher] Gemini raw response:", JSON.stringify(data).slice(0, 1000));
+  console.log("[ATS Matcher] Finish reason:", data?.candidates?.[0]?.finishReason);
+  console.log("[ATS Matcher] Extracted text:", text?.slice(0, 300));
+
   if (!text) throw new Error("Gemini returned an empty response.");
   return text;
 }

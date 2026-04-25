@@ -215,6 +215,7 @@ function setupUploadZone() {
           fileData: base64,
           mimeType: "application/pdf",
           fileName: file.name,
+          fileSize: file.size,
         };
       } else {
         setStatusText("Extracting text from DOCX…");
@@ -224,6 +225,7 @@ function setupUploadZone() {
           extractedText: extractedText,
           mimeType:      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           fileName:      file.name,
+          fileSize:      file.size,
         };
       }
 
@@ -238,6 +240,10 @@ function setupUploadZone() {
       zone.classList.remove("hidden");
       success.classList.remove("hidden");
       $("upload-kw-count").textContent = `${result.resumeData?.allKeywords?.length || 0}`;
+      if (result.cached) {
+        const note = success.querySelector(".upload-success__note");
+        if (note) note.textContent = "Same file detected — used cached keywords (no API call).";
+      }
 
     } catch (err) {
       progress.classList.add("hidden");
